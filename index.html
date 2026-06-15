@@ -299,7 +299,7 @@ function bindDeletes(){ document.querySelectorAll(".del").forEach(b=>b.onclick=(
 function bindCells(){ document.querySelectorAll(".cell").forEach(c=>c.onclick=()=>{ selDay=c.dataset.key; render(); }); }
 
 /* ---------------- Mutations ---------------- */
-function touch(){ DATA.updated=Date.now(); saveLocal(); pushCloud(); render(); }
+function touch(){ DATA.updated=Date.now(); saveLocal(); pushCloud(); scheduleSnapshot(); render(); }
 function addEvent(ev){ DATA.events.push(ev); touch(); }
 function removeEvent(id){ DATA.events=DATA.events.filter(e=>e.id!==id); touch(); }
 
@@ -357,6 +357,26 @@ function pushCloud(){
   },400);
 }
 function setSync(t){ document.getElementById("syncdot").textContent=t; }
+
+/* ---------------- Snapshots (backup on every change, keep last 30) ---------------- */
+let snapTimer=null;
+function scheduleSnapshot(){
+  if(!signedIn) return;
+  clearTimeout(snapTimer);
+  snapTimer=setTimeout(saveSnapshot, 4000);   // a few seconds after the last edit
+}
+async function saveSnapshot(){
+  if(!signedIn) return;
+  try{
+    await sb.from("schedule_snapshots").insert({ data:DATA });
+    const { data:rows } = await sb.from("schedule_snapshots")
+      .select("id,created").order("created",{ascending:false});
+    if(rows && rows.length>30){
+      const old = rows.slice(30).map(r=>r.id);
+      await sb.from("schedule_snapshots").delete().in("id", old);
+    }
+  }catch(e){ /* snapshots are best-effort; never block the app */ }
+}
 
 /* ---------------- Boot ---------------- */
 loadLocal();
