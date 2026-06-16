@@ -334,6 +334,7 @@ function prettyTime(t){ if(!t) return ""; let [h,m]=t.split(":").map(Number); co
 function md(d){ return d.toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function nowMin(){ const n=new Date(); return n.getHours()*60+n.getMinutes(); }
 function toMin(t){ if(!t) return null; const [h,m]=t.split(":").map(Number); return h*60+m; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 /* ==================== STORAGE ==================== */
 function normalize(ev){
