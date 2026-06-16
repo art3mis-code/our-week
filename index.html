@@ -225,6 +225,23 @@
   #undo span{font-size:13.5px;} #undo button{background:none; border:none; color:var(--accent2); font-weight:700; font-size:13.5px;}
   #stampToast{background:linear-gradient(180deg,#15303a,#10212e); border:1px solid rgba(79,209,197,.4);}
   #stampToast span{font-size:13.5px; color:#d6fff7;}
+  /* mood + reactions */
+  .moodcard{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 15px; margin-bottom:12px; backdrop-filter:blur(12px);}
+  .moodcard .mh{font-size:13px; letter-spacing:.06em; color:var(--accent2); margin-bottom:10px; font-weight:600;}
+  .moodslots{display:flex; gap:10px; margin-bottom:11px;}
+  .moodslot{flex:1; text-align:center; background:rgba(255,255,255,.04); border:1px solid var(--line2); border-radius:14px; padding:10px;}
+  .moodslot .em{font-size:26px; line-height:1.1;} .moodslot .lb{font-size:11px; color:var(--soft); margin-top:3px;}
+  .moodslot.empty .em{opacity:.35;}
+  .moodpick{display:flex; gap:6px; flex-wrap:wrap; justify-content:center;}
+  .moodpick button{font-size:20px; background:rgba(255,255,255,.04); border:1px solid var(--line2); border-radius:11px; padding:6px 8px;}
+  .moodpick button.sel{border-color:var(--accent); background:rgba(63,125,255,.2);}
+  .whoset{display:flex; gap:10px;} .whoset button{flex:1; padding:12px; border-radius:13px; border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--ink); font-weight:600; font-size:14px;}
+  .dreact{margin:16px 0 2px;}
+  .dreact .cur{text-align:center; font-size:18px; min-height:24px; margin-bottom:10px;}
+  .dreact .pickrow{display:flex; gap:7px; justify-content:center; flex-wrap:wrap;}
+  .dreact .pickrow button{font-size:20px; background:rgba(255,255,255,.05); border:1px solid var(--line2); border-radius:12px; padding:7px 10px;}
+  .dreact .pickrow button.sel{border-color:var(--tog); background:var(--tog-bg);}
+  .dreact .hint2{text-align:center; font-size:11.5px; color:var(--soft); margin-top:9px;}
   canvas#fx{position:fixed; inset:0; pointer-events:none; z-index:35;}
 </style>
 </head>
@@ -339,6 +356,8 @@ let searchQ = "";
 let sb = null, signedIn = false;
 let editing = null;
 let sheet = { who:"girl", cat:"", allDay:false, repeat:"none", mood:"" };
+let me = "";
+let detailCtx = null;
 
 const LS_KEY = "ourweek_data_v1";
 const DAYNAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -348,6 +367,8 @@ const CATS = [{id:"work",c:"#5fa8ff"},{id:"school",c:"#a78bfa"},{id:"date",c:"#f
 const QUICK = [["Work","work"],["School","school"],["Date night","date"],["Call",""],["Appointment","health"],["Gym","health"]];
 const REPEATS = [["none","One-time"],["daily","Daily"],["weekly","Weekly"],["weekdays","Weekdays"]];
 const MOODS = ["💼","🎀","🛒","🧘","📚","💸","🍿","🚗","☕","📞","🎉","💪"];
+const REACTS = ["❤️","😂","🔥","🥺","👀","😍","💯","🥳"];
+const DAYMOODS = ["😊","😍","🥰","😌","🥳","😴","😩","😤","🫠","🤒"];
 
 /* ==================== DATE HELPERS ==================== */
 function stripTime(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
@@ -369,9 +390,9 @@ function normalize(ev){
     notes: ev.notes||"", location: ev.location||"",
     allDay: ev.allDay!==undefined ? ev.allDay : !(ev.start||ev.time),
     start: ev.start||ev.time||"", end: ev.end||"", date: ev.date, endDate: ev.endDate||"",
-    repeat: ev.repeat||"none", exceptions: ev.exceptions||[] };
+    repeat: ev.repeat||"none", exceptions: ev.exceptions||[], reactions: ev.reactions||{} };
 }
-function normAll(){ DATA.events=(DATA.events||[]).map(normalize); if(!DATA.stamps) DATA.stamps=[]; }
+function normAll(){ DATA.events=(DATA.events||[]).map(normalize); if(!DATA.stamps) DATA.stamps=[]; if(!DATA.moods) DATA.moods={}; }
 function loadLocal(){ try{ const r=JSON.parse(localStorage.getItem(LS_KEY)); if(r&&r.events){ DATA=r; normAll(); } }catch(e){} }
 function saveLocal(){ localStorage.setItem(LS_KEY, JSON.stringify(DATA)); }
 
@@ -422,6 +443,7 @@ function evHTML(o, key){
   let metaBits=[timeText(e)];
   if(e.location) metaBits.push("📍 "+escapeHtml(e.location));
   if(e.repeat!=="none") metaBits.push("⟳ "+e.repeat);
+  const _rx=Object.values(e.reactions||{}); if(_rx.length) metaBits.push(_rx.join(' '));
   let h='<div class="ev '+e.who+(past?" past":"")+'" data-id="'+e.id+'" data-date="'+key+'">';
   h+='<span class="who">'+(e.mood||whoEmoji(e.who))+'</span>';
   h+='<div class="meat" data-edit="'+e.id+'">';
@@ -454,6 +476,7 @@ function renderToday(){
   if(!list.length) h+='<div class="tempty">'+(searchQ?'no matches today':'nothing today — enjoy 🌙')+'</div>';
   list.forEach(o=>{ const e=o.ev; h+='<div class="tmini'+(isPast(e,key)?" past":"")+'"><span class="who">'+(e.mood||whoEmoji(e.who))+'</span><span class="tt">'+timeText(e)+'</span><span>'+escapeHtml(e.label)+'</span></div>'; });
   h+='</div>';
+  h+=moodCardHTML();
   // this-week summary
   const ws=startOfWeek(new Date()); let g=0,b=0,t=0;
   for(let i=0;i<7;i++){ dayList(ymd(addDays(ws,i))).forEach(o=>{ if(o.ev.who==="girl")g++; else if(o.ev.who==="boy")b++; else t++; }); }
@@ -523,6 +546,7 @@ function ripple(card, ev){
 /* ==================== DETAIL SHEET ==================== */
 function openDetail(id, occDate){
   const e=findEv(id); if(!e) return;
+  detailCtx={id, occDate};
   const col=catColor(e.category);
   const sparks=[[14,40],[88,30],[50,72],[78,80]].map((p,i)=>'<span class="spark" style="left:'+p[0]+'%; top:'+p[1]+'px; animation-delay:'+(i*0.5)+'s">✦</span>').join("");
   let h=sparks+'<div class="dh">✦ PLAN DETAILS ✦</div>';
@@ -530,6 +554,11 @@ function openDetail(id, occDate){
   h+='<div class="ddiv"></div>';
   h+='<div class="dmeta">'+whoWord(e.who)+(e.category?' · '+e.category:'')+'<br><span class="big">'+timeText(e)+'</span>'+(e.location?'<br>📍 '+escapeHtml(e.location):'')+(e.repeat!=="none"?'<br>⟳ repeats '+e.repeat:'')+'</div>';
   if(e.notes) h+='<div class="dnote">“'+escapeHtml(e.notes)+'”</div>';
+  const r=e.reactions||{};
+  h+='<div class="dreact"><div class="cur">'+(Object.keys(r).length?Object.keys(r).map(w=>whoEmoji(w)+' '+r[w]).join('   '):'<span style="color:var(--soft);font-size:13px">no reactions yet</span>')+'</div>';
+  if(me) h+='<div class="pickrow">'+REACTS.map(x=>'<button class="'+(r[me]===x?'sel':'')+'" onclick="setReaction(\''+e.id+'\',\''+x+'\')">'+x+'</button>').join('')+'</div>';
+  else h+='<div class="hint2">Set who you are on the Today tab to react.</div>';
+  h+='</div>';
   h+='<div class="dbtns"><button class="edit" id="dEdit">Edit</button><button class="del" id="dDel">Delete</button></div>';
   const card=document.getElementById("detailCard");
   card.innerHTML=h; card.style.boxShadow="0 -10px 60px "+col+"33, 0 0 0 1px "+col+"22";
@@ -538,7 +567,23 @@ function openDetail(id, occDate){
   document.getElementById("dEdit").onclick=()=>{ closeDetail(); openEdit(id, occDate); };
   document.getElementById("dDel").onclick=()=>{ closeDetail(); askDelete(id, occDate); };
 }
-function closeDetail(){ document.getElementById("detail").classList.remove("show"); }
+function closeDetail(){ document.getElementById("detail").classList.remove("show"); detailCtx=null; }
+function setReaction(id, emoji){ const e=findEv(id); if(!e||!me) return; e.reactions=e.reactions||{}; if(e.reactions[me]===emoji) delete e.reactions[me]; else e.reactions[me]=emoji; touch(); if(detailCtx) openDetail(detailCtx.id, detailCtx.occDate); }
+
+/* ==================== IDENTITY + DAILY MOOD ==================== */
+function setMe(w){ me=w; localStorage.setItem("me_v1",w); render(); }
+function pruneMoods(){ const cut=ymd(addDays(new Date(),-60)); Object.keys(DATA.moods||{}).forEach(k=>{ if(k<cut) delete DATA.moods[k]; }); }
+function setMood(emoji){ if(!me) return; const key=ymd(new Date()); DATA.moods=DATA.moods||{}; DATA.moods[key]=DATA.moods[key]||{}; if(DATA.moods[key][me]===emoji) delete DATA.moods[key][me]; else DATA.moods[key][me]=emoji; pruneMoods(); touch(); }
+function moodCardHTML(){
+  const key=ymd(new Date()); const m=(DATA.moods&&DATA.moods[key])||{};
+  if(!me) return '<div class="moodcard"><div class="mh">WHO ARE YOU ON THIS PHONE?</div><div class="whoset"><button onclick="setMe(\'girl\')">👧 Her</button><button onclick="setMe(\'boy\')">👦 Him</button></div></div>';
+  const themW=(me==="girl"?"boy":"girl");
+  let h='<div class="moodcard"><div class="mh">TODAY’S MOOD</div><div class="moodslots">';
+  h+='<div class="moodslot'+(m[me]?'':' empty')+'"><div class="em">'+(m[me]||"🙂")+'</div><div class="lb">you '+whoEmoji(me)+'</div></div>';
+  h+='<div class="moodslot'+(m[themW]?'':' empty')+'"><div class="em">'+(m[themW]||"—")+'</div><div class="lb">'+whoEmoji(themW)+' '+whoWord(themW)+'</div></div>';
+  h+='</div><div class="moodpick">'+DAYMOODS.map(e=>'<button class="'+(m[me]===e?'sel':'')+'" onclick="setMood(\''+e+'\')">'+e+'</button>').join('')+'</div></div>';
+  return h;
+}
 
 /* ==================== MUTATIONS ==================== */
 function touch(){ DATA.updated=Date.now(); checkStamps(); saveLocal(); pushCloud(); scheduleSnapshot(); render(); }
@@ -605,7 +650,7 @@ function syncChips(){
 }
 function openAdd(dateKey){
   editing=null; document.getElementById("sheetTitle").textContent="Add a plan"; document.getElementById("saveAdd").textContent="Add it";
-  sheet={who:"girl",cat:"",allDay:false,repeat:"none",mood:""};
+  sheet={who:me||"girl",cat:"",allDay:false,repeat:"none",mood:""};
   document.getElementById("fLabel").value=""; document.getElementById("fStart").value=""; document.getElementById("fEnd").value="";
   document.getElementById("fDate").value=dateKey||ymd(new Date()); document.getElementById("fEndDate").value="";
   document.getElementById("fLoc").value=""; document.getElementById("fNotes").value="";
@@ -707,7 +752,7 @@ function tickFx(){ fxc.clearRect(0,0,fx.width,fx.height);
 
 /* ==================== BOOT ==================== */
 setAura(); setInterval(setAura, 10*60*1000);
-loadLocal(); buildChips();
+loadLocal(); me=localStorage.getItem("me_v1")||""; buildChips();
 document.getElementById("enterBtn").onclick=unlock;
 document.getElementById("pw").addEventListener("keydown",e=>{ if(e.key==="Enter") unlock(); });
 async function unlock(){
