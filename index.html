@@ -52,7 +52,7 @@
   #lock p{margin:0; color:var(--soft); text-align:center; font-size:14.5px; max-width:280px; line-height:1.5;}
   .pwrap{display:flex; flex-direction:column; gap:11px; width:100%; max-width:300px; margin-top:4px;}
   input[type=password],input[type=text],input[type=time],input[type=date],textarea,select{
-    font-size:16px; padding:13px 14px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.04); color:var(--ink); width:100%;}
+    font-size:16px; padding:13px 14px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.04); color:var(--ink); width:100%; min-width:0; -webkit-box-sizing:border-box;}
   input::placeholder,textarea::placeholder{color:#6c7aa0;}
   input:focus,textarea:focus,select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(63,125,255,.2);}
   .btn{font-size:16px; font-weight:600; padding:14px 16px; border:none; border-radius:14px; background:linear-gradient(180deg,#4985ff,#2f6bff); color:#fff; width:100%; box-shadow:0 8px 24px var(--accentglow);}
@@ -182,7 +182,8 @@
   .whopick button.sel.boy{border-color:var(--boy); background:var(--boy-bg);}
   .whopick button.sel.together{border-color:var(--tog); background:var(--tog-bg);}
   .qchip{font-size:12.5px; padding:7px 11px; border-radius:11px; border:1px dashed var(--line); background:transparent; color:var(--soft);}
-  .row2{display:flex; gap:10px;} .row2 > div{flex:1;}
+  .row2{display:flex; gap:10px;} .row2 > div{flex:1; min-width:0;}
+  @media (max-width:480px){ .row2{flex-direction:column; gap:0;} }
   .toggle{display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,.04); border:1px solid var(--line2); border-radius:13px; padding:11px 13px;}
   .toggle span{font-size:14px; font-weight:500;}
   .sw{width:46px; height:27px; border-radius:20px; background:rgba(255,255,255,.12); position:relative; border:none; flex-shrink:0;}
