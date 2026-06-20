@@ -243,6 +243,19 @@
   .dreact .pickrow button{font-size:20px; background:rgba(255,255,255,.05); border:1px solid var(--line2); border-radius:12px; padding:7px 10px;}
   .dreact .pickrow button.sel{border-color:var(--tog); background:var(--tog-bg);}
   .dreact .hint2{text-align:center; font-size:11.5px; color:var(--soft); margin-top:9px;}
+  /* mood log */
+  .moodlogbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:11px;}
+  .moodlogbar .lastlog{font-size:11.5px; color:var(--soft);}
+  .moodlogbar .lastlog b{color:var(--accent2);}
+  .moodlogbar .logbtn{font-size:12px; font-weight:600; color:var(--accent2); background:rgba(63,125,255,.14); border:1px solid rgba(63,125,255,.32); border-radius:11px; padding:7px 12px; flex-shrink:0;}
+  .moodlogbar .logbtn:active{background:rgba(63,125,255,.28);}
+  .loghead{display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:.05em; color:var(--faint); text-transform:uppercase; padding:2px 4px 6px;}
+  .logrow{display:flex; align-items:center; gap:8px; padding:9px 4px; border-top:1px solid var(--line2); font-size:14px;}
+  .logrow:first-of-type{border-top:none;}
+  .logrow .ld{flex:1; color:var(--soft); font-size:13.5px;}
+  .logrow.istoday .ld{color:var(--accent2); font-weight:600;}
+  .logrow .me,.logrow .them{font-size:20px; width:34px; text-align:center;}
+  .logrow .miss{opacity:.3; font-size:14px;}
   canvas#fx{position:fixed; inset:0; pointer-events:none; z-index:35;}
 </style>
 </head>
@@ -331,6 +344,9 @@
 
 <!-- DETAIL SHEET -->
 <div class="overlay" id="detail"><div class="detailcard shine" id="detailCard"></div></div>
+
+<!-- MOOD LOG -->
+<div class="overlay" id="moodlog"><div class="sheetcard" id="moodlogBody"></div></div>
 
 <!-- CONFIRM MODAL -->
 <div id="modal"><div class="mc"><h3 id="mTitle"></h3><p id="mMsg"></p><div class="mb" id="mBtns"></div></div></div>
@@ -573,7 +589,7 @@ function setReaction(id, emoji){ const e=findEv(id); if(!e||!me) return; e.react
 
 /* ==================== IDENTITY + DAILY MOOD ==================== */
 function setMe(w){ me=w; localStorage.setItem("me_v1",w); render(); }
-function pruneMoods(){ const cut=ymd(addDays(new Date(),-60)); Object.keys(DATA.moods||{}).forEach(k=>{ if(k<cut) delete DATA.moods[k]; }); }
+function pruneMoods(){ const cut=ymd(addDays(new Date(),-730)); Object.keys(DATA.moods||{}).forEach(k=>{ if(k<cut) delete DATA.moods[k]; }); }
 function setMood(emoji){ if(!me) return; const key=ymd(new Date()); DATA.moods=DATA.moods||{}; DATA.moods[key]=DATA.moods[key]||{}; if(DATA.moods[key][me]===emoji) delete DATA.moods[key][me]; else DATA.moods[key][me]=emoji; pruneMoods(); touch(); }
 function moodCardHTML(){
   const key=ymd(new Date()); const m=(DATA.moods&&DATA.moods[key])||{};
@@ -582,9 +598,39 @@ function moodCardHTML(){
   let h='<div class="moodcard"><div class="mh">TODAY’S MOOD</div><div class="moodslots">';
   h+='<div class="moodslot'+(m[me]?'':' empty')+'"><div class="em">'+(m[me]||"🙂")+'</div><div class="lb">you '+whoEmoji(me)+'</div></div>';
   h+='<div class="moodslot'+(m[themW]?'':' empty')+'"><div class="em">'+(m[themW]||"—")+'</div><div class="lb">'+whoEmoji(themW)+' '+whoWord(themW)+'</div></div>';
-  h+='</div><div class="moodpick">'+DAYMOODS.map(e=>'<button class="'+(m[me]===e?'sel':'')+'" onclick="setMood(\''+e+'\')">'+e+'</button>').join('')+'</div></div>';
+  h+='</div><div class="moodpick">'+DAYMOODS.map(e=>'<button class="'+(m[me]===e?'sel':'')+'" onclick="setMood(\''+e+'\')">'+e+'</button>').join('')+'</div>';
+  // last-logged + log button
+  const logged=loggedKeys();
+  const last=logged[logged.length-1];
+  let lastTxt;
+  if(m[me]) lastTxt='logged today ✓';
+  else if(last) lastTxt='last logged: <b>'+(last===key?'today':md(fromYmd(last)))+'</b>';
+  else lastTxt='not logged yet';
+  h+='<div class="moodlogbar"><span class="lastlog">'+lastTxt+'</span><button class="logbtn" onclick="openMoodLog()">📋 Mood log</button></div>';
+  h+='</div>';
   return h;
 }
+function loggedKeys(){ return Object.keys(DATA.moods||{}).filter(k=>DATA.moods[k]&&Object.keys(DATA.moods[k]).length).sort(); }
+function moodLogHTML(){
+  const today=ymd(new Date());
+  const keys=loggedKeys().slice().reverse();
+  let h='<h2>📋 Mood log</h2>';
+  if(!keys.length){ h+='<div class="tempty" style="padding:14px 4px">No moods logged yet. Tap an emoji on the Today tab to start. 🌙</div>'; }
+  else{
+    h+='<div class="loghead"><span style="flex:1">day</span><span style="width:34px;text-align:center">👧</span><span style="width:34px;text-align:center">👦</span></div>';
+    h+=keys.map(k=>{
+      const m=DATA.moods[k]; const sd=fromYmd(k);
+      const lbl=(k===today)?'Today':(DOW[sd.getDay()]+', '+md(sd));
+      const g=m.girl?'<span class="me">'+m.girl+'</span>':'<span class="me miss">—</span>';
+      const b=m.boy?'<span class="them">'+m.boy+'</span>':'<span class="them miss">—</span>';
+      return '<div class="logrow'+(k===today?' istoday':'')+'"><span class="ld">'+escapeHtml(lbl)+'</span>'+g+b+'</div>';
+    }).join('');
+  }
+  h+='<div class="sheetbtns" style="margin-top:14px"><button class="btn ghost" onclick="closeMoodLog()">Close</button></div>';
+  return h;
+}
+function openMoodLog(){ document.getElementById("moodlogBody").innerHTML=moodLogHTML(); document.getElementById("moodlog").classList.add("show"); }
+function closeMoodLog(){ document.getElementById("moodlog").classList.remove("show"); }
 
 /* ==================== MUTATIONS ==================== */
 function touch(){ DATA.updated=Date.now(); checkStamps(); saveLocal(); pushCloud(); scheduleSnapshot(); render(); }
@@ -777,6 +823,7 @@ document.getElementById("cancelAdd").onclick=closeSheet;
 document.getElementById("saveAdd").onclick=saveSheet;
 document.getElementById("sheet").addEventListener("click",e=>{ if(e.target.id==="sheet") closeSheet(); });
 document.getElementById("detail").addEventListener("click",e=>{ if(e.target.id==="detail") closeDetail(); });
+document.getElementById("moodlog").addEventListener("click",e=>{ if(e.target.id==="moodlog") closeMoodLog(); });
 document.querySelectorAll(".whopick button").forEach(b=>b.onclick=()=>{ sheet.who=b.dataset.who; syncChips(); });
 document.getElementById("allDaySw").onclick=()=>{ sheet.allDay=!sheet.allDay; syncChips(); };
 const searchEl=document.getElementById("search");
